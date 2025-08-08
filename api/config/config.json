@@ -1,0 +1,12 @@
+{
+  "corsOrigins": "*",
+  "serverPort": "3001",
+  "otelTraceEndpoint": "jaeger:4318",
+  "postgresql": {
+    "host": "postgres",
+    "port": "5432",
+    "username": "postgres",
+    "password": "root",
+    "database": "test"
+  }
+}
