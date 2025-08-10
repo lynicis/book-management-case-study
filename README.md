@@ -12,15 +12,6 @@
   <strong>A modern, scalable book management system with observability and testing</strong>
 </div>
 
-<div align="center">
-  <a href="#-features">Features</a> •
-  <a href="#-quick-start">Quick Start</a> •
-  <a href="#-architecture">Architecture</a> •
-  <a href="#-api-documentation">API</a> •
-  <a href="#-testing">Testing</a> •
-  <a href="#-contributing">Contributing</a>
-</div>
-
 ## 📖 Table of Contents
 
 - [Features](#-features)
@@ -32,7 +23,6 @@
 - [Testing](#-testing)
 - [Observability](#-observability)
 - [Deployment](#-deployment)
-- [Contributing](#-contributing)
 - [License](#-license)
 
 ## ✨ Features
@@ -210,7 +200,7 @@ cd web
 bun test
 ```
 
-#### E2E Tests
+#### Acceptance Tests
 ```bash
 cd web
 bun run test:acceptance:chrome
@@ -266,16 +256,6 @@ docker-compose up --build
 - Set up monitoring alerts
 - Implement rate limiting
 - Configure proper logging
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our contributing guidelines:
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
 
 ### Development Guidelines
 
