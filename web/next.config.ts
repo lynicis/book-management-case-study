@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
         source: "/metrics",
         destination: "/api/metrics",
       },
+      {
+        source: "/health",
+        destination: "/api/health",
+      },
     ];
   },
   output: "standalone",

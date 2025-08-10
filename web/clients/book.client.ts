@@ -1,5 +1,5 @@
 import ky, { HTTPError, KyInstance } from "ky-universal";
-import { Span, trace } from "@opentelemetry/api";
+import { Span, SpanStatusCode, trace } from "@opentelemetry/api";
 import ms from "ms";
 
 import { BookDTO } from "@/dto/book.dto";
@@ -52,11 +52,19 @@ export default class BookClient implements IBookClient {
         if (!process.env.NEXT_PUBLIC_API_URL) {
           const error = new Error("API_URL is not defined");
 
-          span.recordException(error);
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: "API_URL is not defined",
+          });
           span.end();
+
           throw error;
         }
 
+        span.setStatus({
+          code: SpanStatusCode.OK,
+          message: "Book client created successfully",
+        });
         span.end();
 
         return new BookClient(process.env.NEXT_PUBLIC_API_URL);
@@ -65,6 +73,7 @@ export default class BookClient implements IBookClient {
 
   private recordKyException(span: Span, error: unknown) {
     span.recordException(error instanceof Error ? error : String(error));
+    span.end();
   }
 
   async createBook(book: CreateBookRequest): Promise<Error | undefined> {
@@ -72,13 +81,20 @@ export default class BookClient implements IBookClient {
       .getTracer("book-web-app")
       .startActiveSpan("createBook", async (span) => {
         try {
+          span.setAttributes({
+            newBook: JSON.stringify(book),
+          });
           await this.bookApi.post("book", { json: book });
+
+          span.setStatus({
+            code: SpanStatusCode.OK,
+            message: "Book created successfully",
+          });
+          span.end();
         } catch (error) {
           this.recordKyException(span, error);
 
           return error as HTTPError;
-        } finally {
-          span.end();
         }
       });
   }
@@ -89,6 +105,12 @@ export default class BookClient implements IBookClient {
     return await trace
       .getTracer("book-web-app")
       .startActiveSpan("getBooks", async (span) => {
+        span.setAttributes({
+          page: params?.page,
+          pageSize: params?.pageSize,
+          search: params?.search,
+        });
+
         const searchParams = new URLSearchParams();
 
         if (params?.page || params?.pageSize) {
@@ -111,6 +133,12 @@ export default class BookClient implements IBookClient {
             })
             .json<GetAllBooksResponse>();
 
+          span.setStatus({
+            code: SpanStatusCode.OK,
+            message: "Books fetched successfully",
+          });
+          span.end();
+
           return { books };
         } catch (error) {
           this.recordKyException(span, error);
@@ -119,8 +147,6 @@ export default class BookClient implements IBookClient {
             books: <GetAllBooksResponse>{},
             error: error as HTTPError,
           };
-        } finally {
-          span.end();
         }
       });
   }
@@ -130,6 +156,7 @@ export default class BookClient implements IBookClient {
       .getTracer("book-web-app")
       .startActiveSpan("getBookById", async (span) => {
         try {
+          span.setAttribute("bookId", id);
           const { book } = await this.bookApi
             .get(`book/${id}`, {
               next: {
@@ -139,6 +166,12 @@ export default class BookClient implements IBookClient {
             })
             .json<{ book: BookDTO }>();
 
+          span.setStatus({
+            code: SpanStatusCode.OK,
+            message: "Book fetched successfully",
+          });
+          span.end();
+
           return { book };
         } catch (error) {
           this.recordKyException(span, error);
@@ -147,8 +180,6 @@ export default class BookClient implements IBookClient {
             book: <BookDTO>{},
             error: error as HTTPError,
           };
-        } finally {
-          span.end();
         }
       });
   }
@@ -158,13 +189,18 @@ export default class BookClient implements IBookClient {
       .getTracer("book-web-app")
       .startActiveSpan("updateBook", async (span) => {
         try {
+          span.setAttribute("bookId", book.id);
           await this.bookApi.put(`book/${book.id}`, { json: book });
+
+          span.setStatus({
+            code: SpanStatusCode.OK,
+            message: "Book updated successfully",
+          });
+          span.end();
         } catch (error) {
           this.recordKyException(span, error);
 
           return error as HTTPError;
-        } finally {
-          span.end();
         }
       });
   }
@@ -174,13 +210,18 @@ export default class BookClient implements IBookClient {
       .getTracer("book-web-app")
       .startActiveSpan("deleteBookById", async (span) => {
         try {
+          span.setAttribute("bookId", id);
           await this.bookApi.delete(`book/${id}`);
+
+          span.setStatus({
+            code: SpanStatusCode.OK,
+            message: "Book deleted successfully",
+          });
+          span.end();
         } catch (error) {
           this.recordKyException(span, error);
 
           return error as HTTPError;
-        } finally {
-          span.end();
         }
       });
   }
