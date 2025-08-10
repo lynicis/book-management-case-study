@@ -8,6 +8,8 @@ node_modules
 # testing
 /coverage
 pacts/
+cypress/screenshots/
+cypress/videos/
 
 # next.js
 .next/

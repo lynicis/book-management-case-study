@@ -1,7 +1,9 @@
 import { mount } from "cypress/react";
 import { faker } from "@faker-js/faker";
+import React from "react";
 
 import { BookContext } from "@/components/book-context";
+import BookFormModal from "@/components/book-form-modal";
 import BookTable from "@/components/book-table";
 import { BookDTO } from "@/dto/book.dto";
 
@@ -37,8 +39,14 @@ describe("Table.cy.tsx", () => {
           isFetchingBooks: false,
           filterValue: "",
           rowsPerPage: 5,
+          isCreateBookModalOpen: false,
+          isCreatingBook: false,
           fetchBooks: () => Promise.resolve(),
           setRowsPerPage: () => {},
+          onCreateBookFormSubmit: () => Promise.resolve(),
+          onCreateBookModalChange: () => {},
+          onPaginationChange: () => Promise.resolve(),
+          onCreateBookModalOpen: () => {},
           onClear: () => Promise.resolve(),
           onNextPage: () => Promise.resolve(),
           onPreviousPage: () => Promise.resolve(),
@@ -61,8 +69,10 @@ describe("Table.cy.tsx", () => {
 
     const firstBook = books[0];
 
-    cy.contains(firstBook.id).should("exist");
-    cy.contains(firstBook.title).should("exist");
+    if (firstBook) {
+      cy.contains(firstBook.id!).should("exist");
+      cy.contains(firstBook.title!).should("exist");
+    }
 
     cy.get("button").contains("Previous").should("exist");
     cy.get("button").contains("Next").should("exist");
@@ -76,8 +86,14 @@ describe("Table.cy.tsx", () => {
           isFetchingBooks: false,
           filterValue: "",
           rowsPerPage: 5,
+          isCreateBookModalOpen: false,
+          isCreatingBook: false,
           fetchBooks: () => Promise.resolve(),
           setRowsPerPage: () => {},
+          onCreateBookFormSubmit: () => Promise.resolve(),
+          onCreateBookModalChange: () => {},
+          onPaginationChange: () => Promise.resolve(),
+          onCreateBookModalOpen: () => {},
           onClear: () => Promise.resolve(),
           onNextPage: () => Promise.resolve(),
           onPreviousPage: () => Promise.resolve(),
@@ -115,8 +131,14 @@ describe("Table.cy.tsx", () => {
           isFetchingBooks: false,
           filterValue: "",
           rowsPerPage: 5,
+          isCreateBookModalOpen: false,
+          isCreatingBook: false,
           fetchBooks: () => Promise.resolve(),
           setRowsPerPage: () => {},
+          onCreateBookFormSubmit: () => Promise.resolve(),
+          onCreateBookModalChange: () => {},
+          onPaginationChange: () => Promise.resolve(),
+          onCreateBookModalOpen: () => {},
           onClear: () => Promise.resolve(),
           onNextPage: () => Promise.resolve(),
           onPreviousPage: () => Promise.resolve(),
@@ -156,8 +178,14 @@ describe("Table.cy.tsx", () => {
           isFetchingBooks: false,
           filterValue: "",
           rowsPerPage: 5,
+          isCreateBookModalOpen: false,
+          isCreatingBook: false,
           fetchBooks: () => Promise.resolve(),
           setRowsPerPage: () => {},
+          onCreateBookFormSubmit: () => Promise.resolve(),
+          onCreateBookModalChange: () => {},
+          onPaginationChange: () => Promise.resolve(),
+          onCreateBookModalOpen: () => {},
           onClear: () => Promise.resolve(),
           onNextPage: () => Promise.resolve(),
           onPreviousPage: () => Promise.resolve(),
@@ -206,8 +234,14 @@ describe("Table.cy.tsx", () => {
           isFetchingBooks: false,
           filterValue: "",
           rowsPerPage: 5,
+          isCreateBookModalOpen: false,
+          isCreatingBook: false,
           fetchBooks: () => Promise.resolve(),
           setRowsPerPage: () => {},
+          onCreateBookFormSubmit: () => Promise.resolve(),
+          onCreateBookModalChange: () => {},
+          onPaginationChange: () => Promise.resolve(),
+          onCreateBookModalOpen: () => {},
           onClear: () => Promise.resolve(),
           onNextPage: () => Promise.resolve(),
           onPreviousPage: () => Promise.resolve(),
@@ -258,7 +292,7 @@ describe("Table.cy.tsx", () => {
   });
 
   it("should handle pagination controls based on total pages", () => {
-    const fetchBooksSpy = cy.spy().as("fetchBooks");
+    const onPaginationChangeSpy = cy.spy().as("onPaginationChange");
     const onNextPageSpy = cy.spy().as("onNextPage");
     const onPreviousPageSpy = cy.spy().as("onPreviousPage");
 
@@ -269,8 +303,14 @@ describe("Table.cy.tsx", () => {
           isFetchingBooks: false,
           filterValue: "",
           rowsPerPage: 5,
-          fetchBooks: fetchBooksSpy,
+          isCreateBookModalOpen: false,
+          isCreatingBook: false,
+          fetchBooks: () => Promise.resolve(),
           setRowsPerPage: () => {},
+          onCreateBookFormSubmit: () => Promise.resolve(),
+          onCreateBookModalChange: () => {},
+          onPaginationChange: onPaginationChangeSpy,
+          onCreateBookModalOpen: () => {},
           onClear: () => Promise.resolve(),
           onNextPage: onNextPageSpy,
           onPreviousPage: onPreviousPageSpy,
@@ -302,11 +342,7 @@ describe("Table.cy.tsx", () => {
     cy.get("@onPreviousPage").should("have.been.calledOnce");
 
     cy.get('[aria-label="Pagination"]').contains("2").click();
-    cy.get("@fetchBooks").should("have.been.calledWith", {
-      page: 2,
-      rowsPerPage: 5,
-      filter: "",
-    });
+    cy.get("@onPaginationChange").should("have.been.calledWith", 2);
 
     mount(
       <BookContext.Provider
@@ -315,8 +351,14 @@ describe("Table.cy.tsx", () => {
           isFetchingBooks: false,
           filterValue: "",
           rowsPerPage: 5,
-          fetchBooks: fetchBooksSpy,
+          isCreateBookModalOpen: false,
+          isCreatingBook: false,
+          fetchBooks: () => Promise.resolve(),
           setRowsPerPage: () => {},
+          onCreateBookFormSubmit: () => Promise.resolve(),
+          onCreateBookModalChange: () => {},
+          onPaginationChange: onPaginationChangeSpy,
+          onCreateBookModalOpen: () => {},
           onClear: () => Promise.resolve(),
           onNextPage: onNextPageSpy,
           onPreviousPage: onPreviousPageSpy,
@@ -345,8 +387,14 @@ describe("Table.cy.tsx", () => {
           isFetchingBooks: false,
           filterValue: "",
           rowsPerPage: 5,
+          isCreateBookModalOpen: false,
+          isCreatingBook: false,
           fetchBooks: () => Promise.resolve(),
           setRowsPerPage: () => {},
+          onCreateBookFormSubmit: () => Promise.resolve(),
+          onCreateBookModalChange: () => {},
+          onPaginationChange: () => Promise.resolve(),
+          onCreateBookModalOpen: () => {},
           onClear: onClearSpy,
           onNextPage: () => Promise.resolve(),
           onPreviousPage: () => Promise.resolve(),
@@ -391,25 +439,38 @@ describe("Table.cy.tsx", () => {
   });
 
   it("should shown create a book modal form when add new button clicked", () => {
-    mount(
-      <BookContext.Provider
-        value={{
-          books: { books, currentPage: 1, totalPage: pages },
-          isFetchingBooks: false,
-          filterValue: "",
-          rowsPerPage: 5,
-          fetchBooks: () => Promise.resolve(),
-          setRowsPerPage: () => {},
-          onClear: () => Promise.resolve(),
-          onNextPage: () => Promise.resolve(),
-          onPreviousPage: () => Promise.resolve(),
-          onSearchChange: () => Promise.resolve(),
-          onRowsPerPageChange: () => Promise.resolve(),
-        }}
-      >
-        <BookTable />
-      </BookContext.Provider>,
-    );
+    const TestComponent = () => {
+      const [modalOpen, setModalOpen] = React.useState(false);
+
+      return (
+        <BookContext.Provider
+          value={{
+            books: { books, currentPage: 1, totalPage: pages },
+            isFetchingBooks: false,
+            filterValue: "",
+            rowsPerPage: 5,
+            isCreateBookModalOpen: modalOpen,
+            isCreatingBook: false,
+            fetchBooks: () => Promise.resolve(),
+            setRowsPerPage: () => {},
+            onCreateBookFormSubmit: () => Promise.resolve(),
+            onCreateBookModalChange: setModalOpen,
+            onPaginationChange: () => Promise.resolve(),
+            onCreateBookModalOpen: () => setModalOpen(true),
+            onClear: () => Promise.resolve(),
+            onNextPage: () => Promise.resolve(),
+            onPreviousPage: () => Promise.resolve(),
+            onSearchChange: () => Promise.resolve(),
+            onRowsPerPageChange: () => Promise.resolve(),
+          }}
+        >
+          <BookTable />
+          <BookFormModal />
+        </BookContext.Provider>
+      );
+    };
+
+    mount(<TestComponent />);
 
     cy.get("table").should("exist");
 
@@ -438,9 +499,10 @@ describe("Table.cy.tsx", () => {
     cy.get('[role="dialog"]').should("be.visible");
 
     cy.get('[role="dialog"]').within(() => {
-      cy.get('button[aria-label="Close"]').click();
+      cy.get('button[aria-label="Close"]').should("exist").click();
     });
 
+    cy.wait(500); // Wait for modal animation
     cy.get('[role="dialog"]').should("not.exist");
   });
 });

@@ -1,5 +1,5 @@
+import ky, { HTTPError, KyInstance } from "ky-universal";
 import { Span, trace } from "@opentelemetry/api";
-import ky, { KyInstance } from "ky-universal";
 import ms from "ms";
 
 import { BookDTO } from "@/dto/book.dto";
@@ -27,10 +27,10 @@ export interface IBookClient {
   createBook(book: CreateBookRequest): Promise<Error | undefined>;
   getBooks(
     params?: GetAllBooksRequest,
-  ): Promise<{ books: GetAllBooksResponse; error?: Error }>;
-  getBookById(id: string): Promise<{ book: BookDTO; error?: Error }>;
-  updateBook(book: UpdateBookRequest): Promise<Error | undefined>;
-  deleteBookById(id: string): Promise<Error | undefined>;
+  ): Promise<{ books: GetAllBooksResponse; error?: HTTPError }>;
+  getBookById(id: string): Promise<{ book: BookDTO; error?: HTTPError }>;
+  updateBook(book: UpdateBookRequest): Promise<HTTPError | undefined>;
+  deleteBookById(id: string): Promise<HTTPError | undefined>;
 }
 
 export default class BookClient implements IBookClient {
@@ -46,11 +46,21 @@ export default class BookClient implements IBookClient {
   }
 
   static createFromEnv(): BookClient {
-    if (!process.env.NEXT_PUBLIC_API_URL) {
-      throw Error("API_URL is not defined");
-    }
+    return trace
+      .getTracer("book-web-app")
+      .startActiveSpan("createBookClient", (span) => {
+        if (!process.env.NEXT_PUBLIC_API_URL) {
+          const error = new Error("API_URL is not defined");
 
-    return new BookClient(process.env.NEXT_PUBLIC_API_URL);
+          span.recordException(error);
+          span.end();
+          throw error;
+        }
+
+        span.end();
+
+        return new BookClient(process.env.NEXT_PUBLIC_API_URL);
+      });
   }
 
   private recordKyException(span: Span, error: unknown) {
@@ -62,16 +72,11 @@ export default class BookClient implements IBookClient {
       .getTracer("book-web-app")
       .startActiveSpan("createBook", async (span) => {
         try {
-          await this.bookApi.post("book", {
-            json: book,
-            headers: { "Content-Type": "application/json" },
-          });
-
-          return undefined;
+          await this.bookApi.post("book", { json: book });
         } catch (error) {
           this.recordKyException(span, error);
 
-          return new Error("Error occurred while creating a book");
+          return error as HTTPError;
         } finally {
           span.end();
         }
@@ -80,7 +85,7 @@ export default class BookClient implements IBookClient {
 
   async getBooks(
     params?: GetAllBooksRequest,
-  ): Promise<{ books: GetAllBooksResponse; error?: Error }> {
+  ): Promise<{ books: GetAllBooksResponse; error?: HTTPError }> {
     return await trace
       .getTracer("book-web-app")
       .startActiveSpan("getBooks", async (span) => {
@@ -112,7 +117,7 @@ export default class BookClient implements IBookClient {
 
           return {
             books: <GetAllBooksResponse>{},
-            error: new Error("Error occurred while fetching books"),
+            error: error as HTTPError,
           };
         } finally {
           span.end();
@@ -120,14 +125,13 @@ export default class BookClient implements IBookClient {
       });
   }
 
-  async getBookById(id: string): Promise<{ book: BookDTO; error?: Error }> {
+  async getBookById(id: string): Promise<{ book: BookDTO; error?: HTTPError }> {
     return await trace
       .getTracer("book-web-app")
       .startActiveSpan("getBookById", async (span) => {
         try {
           const { book } = await this.bookApi
             .get(`book/${id}`, {
-              headers: { Accept: "application/json" },
               next: {
                 tags: ["book"],
                 revalidate: ms("1h"),
@@ -141,7 +145,7 @@ export default class BookClient implements IBookClient {
 
           return {
             book: <BookDTO>{},
-            error: new Error("Error occured while parsing response body"),
+            error: error as HTTPError,
           };
         } finally {
           span.end();
@@ -149,26 +153,23 @@ export default class BookClient implements IBookClient {
       });
   }
 
-  async updateBook(book: UpdateBookRequest): Promise<Error | undefined> {
+  async updateBook(book: UpdateBookRequest): Promise<HTTPError | undefined> {
     return await trace
       .getTracer("book-web-app")
       .startActiveSpan("updateBook", async (span) => {
         try {
-          await this.bookApi.put(`book/${book.id}`, {
-            headers: { "Content-Type": "application/json" },
-            json: book,
-          });
+          await this.bookApi.put(`book/${book.id}`, { json: book });
         } catch (error) {
           this.recordKyException(span, error);
 
-          return new Error("Error occurred while updating a book");
+          return error as HTTPError;
         } finally {
           span.end();
         }
       });
   }
 
-  async deleteBookById(id: string): Promise<Error | undefined> {
+  async deleteBookById(id: string): Promise<HTTPError | undefined> {
     return await trace
       .getTracer("book-web-app")
       .startActiveSpan("deleteBookById", async (span) => {
@@ -177,7 +178,7 @@ export default class BookClient implements IBookClient {
         } catch (error) {
           this.recordKyException(span, error);
 
-          return new Error("Error occurred while deleting a book");
+          return error as HTTPError;
         } finally {
           span.end();
         }

@@ -1,6 +1,7 @@
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { notFound } from "next/navigation";
 import { Divider } from "@heroui/divider";
+import { addToast } from "@heroui/toast";
 import { Image } from "@heroui/image";
 import { Chip } from "@heroui/chip";
 import NextImage from "next/image";
@@ -16,8 +17,14 @@ export default async function BookDetail({ params }: PageProps) {
   const bookClient = BookClient.createFromEnv();
   const { book, error } = await bookClient.getBookById(bookId);
 
-  if (error || !book.id) {
+  if (error && error.response.status === 404) {
     notFound();
+  } else if (error) {
+    addToast({
+      title: "Error",
+      description: "Error occurred while fetching book's detail",
+      severity: "danger",
+    });
   }
 
   return (

@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useOptimistic, useState } from "react";
 import { useDisclosure } from "@heroui/modal";
+import { useInterval } from "usehooks-ts";
 import { addToast } from "@heroui/toast";
 import ms from "ms";
 
 import { BookContext } from "../components/book-context";
 
 import BookFormModal from "@/components/book-form-modal";
-import { useInterval } from "@/hooks/useInterval";
 import BookTable from "@/components/book-table";
 import BookClient from "@/clients/book.client";
 import { BookDTO } from "@/dto/book.dto";

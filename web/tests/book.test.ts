@@ -1,7 +1,7 @@
 import path from "path";
 
-import { MatchersV3, PactV4 } from "@pact-foundation/pact";
 import { describe, expect, it, beforeEach } from "bun:test";
+import { MatchersV3, PactV4 } from "@pact-foundation/pact";
 import { faker } from "@faker-js/faker";
 
 import BookClient from "@/clients/book.client";
