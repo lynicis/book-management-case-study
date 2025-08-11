@@ -5,4 +5,7 @@ export type BookDTO = {
   author: string;
   publicationYear: string;
   isbn?: string;
+  createdAt: string;
+  updatedAt?: string;
+  deletedAt?: string;
 };

@@ -6,3 +6,6 @@ lint:
 
 test:
 	go test ./...
+
+test-pact:
+	go test -tags pact ./... 

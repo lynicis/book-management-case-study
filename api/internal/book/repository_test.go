@@ -1,7 +1,11 @@
+//go:build !pact
+// +build !pact
+
 package book
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -85,6 +89,7 @@ func TestPgRepository_CreateBook(t *testing.T) {
 
 		pgRepository := &PgRepository{
 			connectionPool: pool,
+			traceProvider:  trace.NewTracerProvider(),
 		}
 		now := time.Now().UTC()
 		err = pgRepository.CreateBook(context.TODO(), &BookDTO{
@@ -180,6 +185,7 @@ func TestPgRepository_UpdateBook(t *testing.T) {
 
 		pgRepository := &PgRepository{
 			connectionPool: pool,
+			traceProvider:  trace.NewTracerProvider(),
 		}
 		now := time.Now().UTC()
 		err = pgRepository.UpdateBookById(context.TODO(), uuid.NewString(), &BookDTO{
@@ -270,6 +276,7 @@ func TestPgRepository_GetBookById(t *testing.T) {
 
 		pgRepository := &PgRepository{
 			connectionPool: pool,
+			traceProvider:  trace.NewTracerProvider(),
 		}
 		book, err := pgRepository.GetBookById(context.TODO(), uuid.NewString())
 
@@ -285,12 +292,89 @@ func TestPgRepository_GetBookById(t *testing.T) {
 		pgPort, err := pgContainer.MappedPort(context.Background(), "5432/tcp")
 		require.NoError(t, err)
 
+		t.Cleanup(func() {
+			err = pgContainer.Restore(context.Background())
+			require.NoError(t, err)
+		})
+
 		pgRepository := NewPgRepository(trace.NewTracerProvider(), pgHost, pgPort.Port(), "root", "root", "test")
 		book, err := pgRepository.GetBookById(context.TODO(), uuid.NewString())
 
 		assert.Nil(t, book)
 		assert.Error(t, err)
-		assert.Equal(t, err.(*fiber.Error).Code, fiber.StatusNotFound)
+		assert.Equal(t, fiber.StatusNotFound, err.(*fiber.Error).Code)
+	})
+}
+
+func TestPgRepository_GetBooks(t *testing.T) {
+	t.Run("happy path", func(t *testing.T) {
+		pgContainer := setupContainer(t)
+		pgHost, err := pgContainer.Host(context.Background())
+		require.NoError(t, err)
+
+		pgPort, err := pgContainer.MappedPort(context.Background(), "5432/tcp")
+		require.NoError(t, err)
+
+		t.Cleanup(func() {
+			err = pgContainer.Restore(context.Background())
+			require.NoError(t, err)
+		})
+
+		pgRepository := NewPgRepository(trace.NewTracerProvider(), pgHost, pgPort.Port(), "root", "root", "test")
+		for i := 0; i < 3; i++ {
+			_, err = pgRepository.connectionPool.Exec(
+				context.TODO(),
+				"insert into books (id, cover_url, isbn, title, author, publication_year, created_at) values ($1,$2,$3,$4,$5,$6,$7)",
+				uuid.NewString(),
+				"https://img.com/cover.jpg",
+				"1234567890",
+				fmt.Sprintf("Book %d", i+1),
+				"Author",
+				"2000",
+				time.Now().UTC(),
+			)
+			require.NoError(t, err)
+		}
+
+		books, total, err := pgRepository.GetBooks(context.TODO(), 1, 2, "")
+		assert.NoError(t, err)
+		assert.NotNil(t, books)
+		assert.Len(t, *books, 2)
+		assert.Equal(t, 3, total)
+	})
+
+	t.Run("acquire connection error", func(t *testing.T) {
+		pgCfg, err := pgxpool.ParseConfig("postgres://joedoe:secret@pg.example.com:5432/mydb")
+		require.NoError(t, err)
+
+		pool, err := pgxpool.NewWithConfig(context.Background(), pgCfg)
+		require.NoError(t, err)
+
+		pgRepository := &PgRepository{
+			connectionPool: pool,
+			traceProvider:  trace.NewTracerProvider(),
+		}
+		books, total, err := pgRepository.GetBooks(context.TODO(), 1, 5, "")
+		assert.Error(t, err)
+		assert.Nil(t, books)
+		assert.Equal(t, 0, total)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		pgContainer := setupContainer(t)
+		pgHost, err := pgContainer.Host(context.Background())
+		require.NoError(t, err)
+
+		pgPort, err := pgContainer.MappedPort(context.Background(), "5432/tcp")
+		require.NoError(t, err)
+
+		pgRepository := NewPgRepository(trace.NewTracerProvider(), pgHost, pgPort.Port(), "root", "root", "test")
+		books, total, err := pgRepository.GetBooks(context.TODO(), 1, 5, "searchdoesnotmatch")
+
+		assert.Error(t, err)
+		assert.Nil(t, books)
+		assert.Equal(t, 0, total)
+		assert.Equal(t, fiber.StatusNotFound, err.(*fiber.Error).Code)
 	})
 }
 
@@ -339,6 +423,7 @@ func TestPgRepository_DeleteBookById(t *testing.T) {
 
 		pgRepository := &PgRepository{
 			connectionPool: pool,
+			traceProvider:  trace.NewTracerProvider(),
 		}
 		err = pgRepository.DeleteBookById(context.TODO(), uuid.NewString())
 

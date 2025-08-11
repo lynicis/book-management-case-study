@@ -84,12 +84,13 @@ func (mr *MockRepositoryMockRecorder) GetBookById(ctx, id any) *gomock.Call {
 }
 
 // GetBooks mocks base method.
-func (m *MockRepository) GetBooks(ctx context.Context, page, pageSize int, search string) (*[]BookDTO, error) {
+func (m *MockRepository) GetBooks(ctx context.Context, page, pageSize int, search string) (*[]BookDTO, int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBooks", ctx, page, pageSize, search)
 	ret0, _ := ret[0].(*[]BookDTO)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].(int)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // GetBooks indicates an expected call of GetBooks.

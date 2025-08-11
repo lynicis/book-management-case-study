@@ -15,7 +15,8 @@
     "test:acceptance:firefox": "cypress run --e2e --browser=firefox",
     "test:component:chrome": "cypress run --component --browser=chrome",
     "test:component:firefox": "cypress run --component --browser=firefox",
-    "test:pact": "bun test --coverage ./tests/pact"
+    "test:pact": "bun test --coverage --test-name-pattern=pact",
+    "posttest:pact": "pact broker publish pacts/ -g -r --broker-base-url=http://localhost:3003"
   },
   "dependencies": {
     "@heroui/button": "2.2.24",

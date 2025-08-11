@@ -11,6 +11,8 @@ export type GetAllBooksRequest = Partial<{
 }>;
 
 export type CreateBookRequest = {
+  coverUrl: string;
+  isbn: string;
   title: string;
   author: string;
   publicationYear: string;
@@ -24,7 +26,7 @@ export type GetAllBooksResponse = {
 };
 
 export interface IBookClient {
-  createBook(book: CreateBookRequest): Promise<Error | undefined>;
+  createBook(book: CreateBookRequest): Promise<HTTPError | undefined>;
   getBooks(
     params?: GetAllBooksRequest,
   ): Promise<{ books: GetAllBooksResponse; error?: HTTPError }>;
@@ -76,7 +78,7 @@ export default class BookClient implements IBookClient {
     span.end();
   }
 
-  async createBook(book: CreateBookRequest): Promise<Error | undefined> {
+  async createBook(book: CreateBookRequest): Promise<HTTPError | undefined> {
     return await trace
       .getTracer("book-web-app")
       .startActiveSpan("createBook", async (span) => {

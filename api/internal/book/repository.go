@@ -10,6 +10,7 @@ import (
 	"github.com/exaring/otelpgx"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -20,7 +21,7 @@ import (
 
 type Repository interface {
 	CreateBook(ctx context.Context, book *BookDTO) error
-	GetBooks(ctx context.Context, page int, pageSize int, search string) (*[]BookDTO, error)
+	GetBooks(ctx context.Context, page int, pageSize int, search string) (*[]BookDTO, int, error)
 	GetBookById(ctx context.Context, id string) (*BookDTO, error)
 	UpdateBookById(ctx context.Context, id string, book *BookDTO) error
 	DeleteBookById(ctx context.Context, id string) error
@@ -83,7 +84,7 @@ func (r *PgRepository) CreateBook(ctx context.Context, book *BookDTO) error {
 
 	connection, err := r.connectionPool.Acquire(ctx)
 	if err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to acquire connection")
+		return fiber.ErrInternalServerError
 	}
 	defer connection.Release()
 
@@ -98,7 +99,7 @@ func (r *PgRepository) CreateBook(ctx context.Context, book *BookDTO) error {
 		book.PublicationYear,
 		time.Now().UTC(),
 	); err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to create book")
+		return fiber.ErrInternalServerError
 	}
 
 	return nil
@@ -109,7 +110,7 @@ func (r *PgRepository) GetBooks(
 	page,
 	pageSize int,
 	search string,
-) (*[]BookDTO, error) {
+) (*[]BookDTO, int, error) {
 	ctx, span := r.traceProvider.Tracer("bookRepository").
 		Start(ctx, "GetBooks", trace.WithAttributes(attribute.KeyValue{
 			Key:   "page",
@@ -125,7 +126,7 @@ func (r *PgRepository) GetBooks(
 
 	connection, err := r.connectionPool.Acquire(ctx)
 	if err != nil {
-		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to acquire connection")
+		return nil, 0, fiber.ErrInternalServerError
 	}
 	defer connection.Release()
 
@@ -135,9 +136,19 @@ func (r *PgRepository) GetBooks(
 	args := make([]interface{}, 0, 3)
 	argIndex := 1
 
+	var countQuery strings.Builder
+	countQuery.WriteString("select count(*) from books where deleted_at is null")
+
+	countArgs := make([]interface{}, 0, 1)
+
 	if search != "" {
-		query.WriteString(" and to_tsvector(id || ' ' || service_name) @@ to_tsquery($1)")
+		searchPlaceholder := fmt.Sprintf("$%d", argIndex)
+		condition := fmt.Sprintf(" and to_tsvector(id || ' ' || title || ' ' || author || ' ' || publication_year) @@ to_tsquery(%s)", searchPlaceholder)
+		query.WriteString(condition)
+		countQuery.WriteString(fmt.Sprintf(" and to_tsvector(id || ' ' || title || ' ' || author || ' ' || publication_year) @@ to_tsquery(%s)", searchPlaceholder))
+
 		args = append(args, search)
+		countArgs = append(countArgs, search)
 		argIndex++
 	}
 
@@ -147,16 +158,29 @@ func (r *PgRepository) GetBooks(
 	var rows pgx.Rows
 	rows, err = connection.Query(ctx, query.String(), args...)
 	if err != nil {
-		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to get books")
+		return nil, 0, fiber.ErrInternalServerError
 	}
 
 	var books []BookDTO
 	books, err = pgx.CollectRows(rows, pgx.RowToStructByName[BookDTO])
 	if err != nil {
-		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to collect books")
+		return nil, 0, fiber.ErrInternalServerError
 	}
 
-	return &books, nil
+	var totalRows int
+	if err = connection.QueryRow(ctx, countQuery.String(), countArgs...).Scan(&totalRows); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, 0, fiber.ErrNotFound
+		}
+
+		return nil, 0, fiber.ErrInternalServerError
+	}
+
+	if totalRows == 0 {
+		return nil, 0, fiber.ErrNotFound
+	}
+
+	return &books, totalRows, nil
 }
 
 func (r *PgRepository) GetBookById(ctx context.Context, id string) (*BookDTO, error) {
@@ -168,24 +192,24 @@ func (r *PgRepository) GetBookById(ctx context.Context, id string) (*BookDTO, er
 
 	connection, err := r.connectionPool.Acquire(ctx)
 	if err != nil {
-		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to acquire connection")
+		return nil, fiber.ErrInternalServerError
 	}
 	defer connection.Release()
 
 	var row pgx.Rows
 	row, err = connection.Query(ctx, "select * from books where id = $1 and deleted_at is null", id)
 	if err != nil {
-		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to get book")
+		return nil, fiber.ErrInternalServerError
 	}
 
 	var book BookDTO
 	book, err = pgx.CollectOneRow(row, pgx.RowToStructByNameLax[BookDTO])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fiber.NewError(fiber.StatusNotFound, "book not found")
+			return nil, fiber.ErrNotFound
 		}
 
-		return nil, fiber.NewError(fiber.StatusInternalServerError, "failed to collect an book")
+		return nil, fiber.ErrInternalServerError
 	}
 
 	return &book, nil
@@ -208,11 +232,11 @@ func (r *PgRepository) UpdateBookById(ctx context.Context, id string, book *Book
 
 	connection, err := r.connectionPool.Acquire(ctx)
 	if err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to acquire connection")
+		return fiber.ErrInternalServerError
 	}
 	defer connection.Release()
 
-	if _, err = connection.Exec(
+	if cmd, err := connection.Exec(
 		ctx,
 		"update books set title = $1, author = $2, publication_year = $3 where id = $4 and deleted_at is null",
 		book.Title,
@@ -220,10 +244,11 @@ func (r *PgRepository) UpdateBookById(ctx context.Context, id string, book *Book
 		book.PublicationYear,
 		id,
 	); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return fiber.NewError(fiber.StatusNotFound, "book not found")
+		if cmd.RowsAffected() == 0 {
+			return fiber.ErrNotFound
 		}
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to update book by id")
+
+		return fiber.ErrInternalServerError
 	}
 
 	return nil
@@ -239,17 +264,17 @@ func (r *PgRepository) DeleteBookById(ctx context.Context, id string) error {
 
 	connection, err := r.connectionPool.Acquire(ctx)
 	if err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to acquire connection")
+		return fiber.ErrInternalServerError
 	}
 	defer connection.Release()
 
 	now := time.Now().UTC()
-	if _, err = connection.Exec(ctx, "update books set deleted_at = $1 where id = $2 and deleted_at is null", now, id); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return fiber.NewError(fiber.StatusNotFound, "book not found")
+	if cmd, err := connection.Exec(ctx, "update books set deleted_at = $1 where id = $2 and deleted_at is null", now, id); err != nil {
+		if cmd.RowsAffected() == 0 {
+			return fiber.ErrNotFound
 		}
 
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to delete an book")
+		return fiber.ErrInternalServerError
 	}
 
 	return nil

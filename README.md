@@ -55,7 +55,7 @@ cd byfood-case-study
 
 2. **Start the application with Docker Compose**
 ```bash
-docker-compose up -d
+docker-compose -f docker-compose.yml up -d
 ```
 
 3. **Access the services**
@@ -191,13 +191,14 @@ bun run dev
 #### Unit Tests (API)
 ```bash
 cd api
-go test ./...
+make test
 ```
 
 #### Unit Tests (Web)
 ```bash
 cd web
-bun test
+bun test:component:chrome
+bun test:component:firefox
 ```
 
 #### Acceptance Tests
@@ -207,9 +208,17 @@ bun run test:acceptance:chrome
 ```
 
 #### Contract Tests
+
+[Pact CLI Installation Guide](https://docs.pact.io/implementation_guides/cli)
+
 ```bash
+docker compose -f docker-compose.pact.yml up
+
 cd web
 bun run test:pact
+
+cd api
+make test-pact
 ```
 
 ### Test Coverage
@@ -245,7 +254,7 @@ Access Jaeger UI at http://localhost:16686
 
 Build and run with Docker Compose:
 ```bash
-docker-compose up --build
+docker-compose -f docker-compose.yml up -d
 ```
 
 ### Production Considerations

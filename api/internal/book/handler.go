@@ -44,6 +44,7 @@ func (h *Handler) CreateBook(ctx *fiber.Ctx) error {
 		return fiber.ErrBadRequest
 	}
 
+	now := time.Now().UTC()
 	if err := h.repository.CreateBook(ctx.Context(), &BookDTO{
 		Id:              uuid.NewString(),
 		CoverUrl:        reqBody.CoverUrl,
@@ -51,6 +52,7 @@ func (h *Handler) CreateBook(ctx *fiber.Ctx) error {
 		Title:           reqBody.Title,
 		Author:          reqBody.Author,
 		PublicationYear: reqBody.PublicationYear,
+		CreatedAt:       &now,
 	}); err != nil {
 		return err
 	}
@@ -73,10 +75,10 @@ func (h *Handler) GetBooks(ctx *fiber.Ctx) error {
 	}
 
 	if queries.PageSize == 0 {
-		queries.PageSize = 50
+		queries.PageSize = 5
 	}
 
-	books, err := h.repository.GetBooks(
+	books, total, err := h.repository.GetBooks(
 		ctx.Context(),
 		queries.Page,
 		queries.PageSize,
@@ -86,7 +88,10 @@ func (h *Handler) GetBooks(ctx *fiber.Ctx) error {
 		return err
 	}
 
-	return ctx.JSON(books)
+	return ctx.JSON(fiber.Map{
+		"books":     books,
+		"totalPage": total / queries.PageSize,
+	})
 }
 
 func (h *Handler) GetBookById(ctx *fiber.Ctx) error {
@@ -100,7 +105,9 @@ func (h *Handler) GetBookById(ctx *fiber.Ctx) error {
 		return err
 	}
 
-	return ctx.JSON(book)
+	return ctx.JSON(fiber.Map{
+		"book": book,
+	})
 }
 
 func (h *Handler) UpdateBookById(ctx *fiber.Ctx) error {

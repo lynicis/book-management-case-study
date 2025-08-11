@@ -188,7 +188,7 @@ func TestHandler_GetBooks(t *testing.T) {
 		mockRepository.
 			EXPECT().
 			GetBooks(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(books, nil).
+			Return(books, 2, nil).
 			Times(1)
 
 		server, validate := setupServer()
@@ -271,7 +271,7 @@ func TestHandler_GetBooks(t *testing.T) {
 		mockRepository.
 			EXPECT().
 			GetBooks(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(nil, fiber.NewError(fiber.StatusInternalServerError, "repository error"))
+			Return(nil, 0, fiber.NewError(fiber.StatusInternalServerError, "repository error"))
 
 		server, validate := setupServer()
 		h := NewHandler(server, validate, mockRepository)
