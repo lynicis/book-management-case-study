@@ -29,6 +29,7 @@ import (
 	"go.uber.org/zap"
 
 	"book-api/internal/book"
+	"book-api/internal/url"
 	"book-api/pkg/config"
 	_ "book-api/pkg/log"
 )
@@ -84,8 +85,11 @@ func main() {
 		return ctx.Status(fiber.StatusOK).JSON(map[string]interface{}{"Status": "OK"})
 	})
 
-	validate := validator.New()
-	handlers := []GlobalHandler{book.NewHandler(server, validate, bookPgRepository)}
+	validate := validator.New(validator.WithRequiredStructEnabled())
+	handlers := []GlobalHandler{
+		book.NewHandler(server, validate, traceProvider.Tracer("book"), bookPgRepository),
+		url.NewHandler(server, validate, traceProvider.Tracer("url")),
+	}
 	for _, handler := range handlers {
 		handler.RegisterHandlers()
 	}

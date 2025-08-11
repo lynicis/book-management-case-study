@@ -15,16 +15,18 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/mock/gomock"
 )
 
 func TestHandler_NewHandler(t *testing.T) {
-	h := NewHandler(nil, nil, nil)
+	h := NewHandler(nil, nil, nil, nil)
 	assert.NotNil(t, h)
 }
 
 func TestHandler_RegisterHandlers(t *testing.T) {
-	h := NewHandler(fiber.New(), nil, nil)
+	h := NewHandler(fiber.New(), nil, nil, nil)
 
 	assert.NotPanics(t, h.RegisterHandlers)
 }
@@ -37,8 +39,8 @@ func TestHandler_CreateBook(t *testing.T) {
 		mockRepository := NewMockRepository(mockController)
 		mockRepository.EXPECT().CreateBook(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
-		server, validate := setupServer()
-		h := NewHandler(server, validate, mockRepository)
+		server, validate, tracer := setupServer()
+		h := NewHandler(server, validate, tracer, mockRepository)
 		h.RegisterHandlers()
 
 		marshalledReqBody, err := json.Marshal(CreateBookRequest{
@@ -64,8 +66,8 @@ func TestHandler_CreateBook(t *testing.T) {
 	})
 
 	t.Run("invalid request body", func(t *testing.T) {
-		server, validate := setupServer()
-		h := NewHandler(server, validate, nil)
+		server, validate, tracer := setupServer()
+		h := NewHandler(server, validate, tracer, nil)
 		h.RegisterHandlers()
 
 		requestBody := []CreateBookRequest{
@@ -128,8 +130,8 @@ func TestHandler_CreateBook(t *testing.T) {
 			CreateBook(gomock.Any(), gomock.Any()).
 			Return(fiber.NewError(fiber.StatusInternalServerError, "repository error"))
 
-		server, validate := setupServer()
-		h := NewHandler(server, validate, mockRepository)
+		server, validate, tracer := setupServer()
+		h := NewHandler(server, validate, tracer, mockRepository)
 		h.RegisterHandlers()
 
 		reqBody := CreateBookRequest{
@@ -191,8 +193,8 @@ func TestHandler_GetBooks(t *testing.T) {
 			Return(books, 2, nil).
 			Times(1)
 
-		server, validate := setupServer()
-		h := NewHandler(server, validate, mockRepository)
+		server, validate, tracer := setupServer()
+		h := NewHandler(server, validate, tracer, mockRepository)
 		h.RegisterHandlers()
 
 		queries := []map[string]string{
@@ -231,8 +233,8 @@ func TestHandler_GetBooks(t *testing.T) {
 	})
 
 	t.Run("invalid request queries", func(t *testing.T) {
-		server, validate := setupServer()
-		h := NewHandler(server, validate, nil)
+		server, validate, tracer := setupServer()
+		h := NewHandler(server, validate, tracer, nil)
 		h.RegisterHandlers()
 
 		queries := []map[string]string{
@@ -273,8 +275,8 @@ func TestHandler_GetBooks(t *testing.T) {
 			GetBooks(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil, 0, fiber.NewError(fiber.StatusInternalServerError, "repository error"))
 
-		server, validate := setupServer()
-		h := NewHandler(server, validate, mockRepository)
+		server, validate, tracer := setupServer()
+		h := NewHandler(server, validate, tracer, mockRepository)
 		h.RegisterHandlers()
 
 		req := httptest.NewRequest(http.MethodGet, "/books", nil)
@@ -305,8 +307,8 @@ func TestHandler_GetBookById(t *testing.T) {
 			CreatedAt:       &now,
 		}, nil)
 
-		server, validate := setupServer()
-		h := NewHandler(server, validate, mockRepository)
+		server, validate, tracer := setupServer()
+		h := NewHandler(server, validate, tracer, mockRepository)
 		h.RegisterHandlers()
 
 		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/book/%s", id), nil)
@@ -319,8 +321,8 @@ func TestHandler_GetBookById(t *testing.T) {
 	})
 
 	t.Run("invalid book id", func(t *testing.T) {
-		server, validate := setupServer()
-		h := NewHandler(server, validate, nil)
+		server, validate, tracer := setupServer()
+		h := NewHandler(server, validate, tracer, nil)
 		h.RegisterHandlers()
 
 		req := httptest.NewRequest(http.MethodGet, "/book/123", nil)
@@ -335,8 +337,8 @@ func TestHandler_GetBookById(t *testing.T) {
 		mockRepository := NewMockRepository(mockController)
 		mockRepository.EXPECT().GetBookById(gomock.Any(), gomock.Any()).Return(nil, fiber.NewError(fiber.StatusInternalServerError, "repository error"))
 
-		server, validate := setupServer()
-		h := NewHandler(server, validate, mockRepository)
+		server, validate, tracer := setupServer()
+		h := NewHandler(server, validate, tracer, mockRepository)
 		h.RegisterHandlers()
 
 		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/book/%s", uuid.NewString()), nil)
@@ -360,8 +362,8 @@ func TestHandler_UpdateBookById(t *testing.T) {
 			Return(nil).
 			Times(3)
 
-		server, validate := setupServer()
-		h := NewHandler(server, validate, mockRepository)
+		server, validate, tracer := setupServer()
+		h := NewHandler(server, validate, tracer, mockRepository)
 		h.RegisterHandlers()
 
 		requestBody := []CreateBookRequest{
@@ -403,8 +405,8 @@ func TestHandler_UpdateBookById(t *testing.T) {
 	})
 
 	t.Run("invalid request body", func(t *testing.T) {
-		server, validate := setupServer()
-		h := NewHandler(server, validate, nil)
+		server, validate, tracer := setupServer()
+		h := NewHandler(server, validate, tracer, nil)
 		h.RegisterHandlers()
 
 		requestBody := []CreateBookRequest{
@@ -462,8 +464,8 @@ func TestHandler_UpdateBookById(t *testing.T) {
 		mockRepository := NewMockRepository(mockController)
 		mockRepository.EXPECT().UpdateBookById(gomock.Any(), gomock.Any(), gomock.Any()).Return(fiber.NewError(fiber.StatusInternalServerError, "repository error"))
 
-		server, validate := setupServer()
-		h := NewHandler(server, validate, mockRepository)
+		server, validate, tracer := setupServer()
+		h := NewHandler(server, validate, tracer, mockRepository)
 		h.RegisterHandlers()
 
 		requestBody := CreateBookRequest{
@@ -497,8 +499,8 @@ func TestHandler_DeleteBookById(t *testing.T) {
 		mockRepository := NewMockRepository(mockController)
 		mockRepository.EXPECT().DeleteBookById(gomock.Any(), gomock.Any()).Return(nil)
 
-		server, validate := setupServer()
-		h := NewHandler(server, validate, mockRepository)
+		server, validate, tracer := setupServer()
+		h := NewHandler(server, validate, tracer, mockRepository)
 		h.RegisterHandlers()
 
 		req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("/book/%s", uuid.NewString()), nil)
@@ -510,8 +512,8 @@ func TestHandler_DeleteBookById(t *testing.T) {
 	})
 
 	t.Run("invalid request body", func(t *testing.T) {
-		server, validate := setupServer()
-		h := NewHandler(server, validate, nil)
+		server, validate, tracer := setupServer()
+		h := NewHandler(server, validate, tracer, nil)
 		h.RegisterHandlers()
 
 		req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("/book/%s", "invalid-id"), nil)
@@ -527,8 +529,8 @@ func TestHandler_DeleteBookById(t *testing.T) {
 		mockRepository := NewMockRepository(mockController)
 		mockRepository.EXPECT().DeleteBookById(gomock.Any(), gomock.Any()).Return(fiber.NewError(fiber.StatusInternalServerError, "repository error"))
 
-		server, validate := setupServer()
-		h := NewHandler(server, validate, mockRepository)
+		server, validate, tracer := setupServer()
+		h := NewHandler(server, validate, tracer, mockRepository)
 		h.RegisterHandlers()
 
 		req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("/book/%s", uuid.NewString()), nil)
@@ -540,12 +542,12 @@ func TestHandler_DeleteBookById(t *testing.T) {
 	})
 }
 
-func setupServer() (*fiber.App, *validator.Validate) {
+func setupServer() (*fiber.App, *validator.Validate, trace.Tracer) {
 	server := fiber.New(fiber.Config{
 		JSONDecoder:           json.Unmarshal,
 		JSONEncoder:           json.Marshal,
 		DisableStartupMessage: true,
 	})
 
-	return server, validator.New()
+	return server, validator.New(), otel.Tracer("book")
 }
