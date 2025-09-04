@@ -53,6 +53,7 @@ func (h *Handler) GetUrl(ctx *fiber.Ctx) error {
 
 	var processed string
 
+	// TECH DEBT: Possible refactoring with Strategy Pattern for Open/Closed principle
 	switch reqBody.Operation {
 	case "canonical":
 		processed = canonicalURL(reqBody.Url).String()

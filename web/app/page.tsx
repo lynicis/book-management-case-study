@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useOptimistic, useState } from "react";
+import {
+  startTransition,
+  useCallback,
+  useReducer,
+  useEffect,
+  useState,
+  Reducer,
+} from "react";
 import { useDisclosure } from "@heroui/modal";
 import { useInterval } from "usehooks-ts";
 import { addToast } from "@heroui/toast";
@@ -8,9 +15,11 @@ import ms from "ms";
 
 import { BookContext } from "../components/book-context";
 
+import { revalidateCache } from "./actions";
+
+import BookClient, { CreateBookRequest } from "@/clients/book.client";
 import BookFormModal from "@/components/book-form-modal";
 import BookTable from "@/components/book-table";
-import BookClient from "@/clients/book.client";
 import { BookDTO } from "@/dto/book.dto";
 
 export type BookState = {
@@ -41,41 +50,43 @@ export type BookStateAction =
       id: string;
     };
 
+const bookReducer: Reducer<BookState, BookStateAction> = (
+  state: BookState,
+  action: BookStateAction,
+): BookState => {
+  switch (action.type) {
+    case "SET_BOOKS":
+      return {
+        books: action.payload.books,
+        totalPage: action.payload.totalPage,
+        currentPage: action.payload.currentPage,
+      };
+    case "ADD_BOOK":
+      return {
+        books: [...state.books, action.payload.book],
+        totalPage: Math.ceil(
+          (state.books.length + 1) / action.payload.pageSize,
+        ),
+        currentPage: state.currentPage,
+      };
+    case "REVERT":
+      return {
+        books: state.books.filter((book) => book.id !== action.id),
+        totalPage: state.totalPage,
+        currentPage: state.currentPage,
+      };
+    default:
+      return state;
+  }
+};
+
 export default function Dashboard() {
   const bookClient = BookClient.createFromEnv();
-  const [books, setBooks] = useOptimistic<BookState, BookStateAction>(
-    {
-      books: [],
-      totalPage: 0,
-      currentPage: 0,
-    },
-    (state: BookState, action: BookStateAction): BookState => {
-      switch (action.type) {
-        case "SET_BOOKS":
-          return {
-            books: action.payload.books,
-            totalPage: action.payload.totalPage,
-            currentPage: action.payload.currentPage,
-          };
-        case "ADD_BOOK":
-          return {
-            books: [...state.books, action.payload.book],
-            totalPage: Math.ceil(
-              (state.books.length + 1) / action.payload.pageSize,
-            ),
-            currentPage: state.currentPage,
-          };
-        case "REVERT":
-          return {
-            books: state.books.filter((book) => book.id !== action.id),
-            totalPage: state.totalPage,
-            currentPage: state.currentPage,
-          };
-        default:
-          return state;
-      }
-    },
-  );
+  const [books, dispatchBook] = useReducer(bookReducer, {
+    books: [],
+    totalPage: 0,
+    currentPage: 0,
+  });
   const [errorCause, setErrorCause] = useState<
     "fetchingBooks" | "creatingBook" | undefined
   >();
@@ -122,7 +133,7 @@ export default function Dashboard() {
         return setFetchingBooks(false);
       }
 
-      setBooks({
+      dispatchBook({
         type: "SET_BOOKS",
         payload: {
           books: fetchedBooks,
@@ -202,33 +213,44 @@ export default function Dashboard() {
   }, [books, pageSize, fetchBooks]);
 
   const onCreateBookFormSubmit = useCallback(
-    async (book: BookDTO): Promise<void> => {
+    async (book: CreateBookRequest): Promise<void> => {
+      const bookId = self.crypto.randomUUID();
+
       setCreatingBook(true);
-      setBooks({
+      dispatchBook({
         type: "ADD_BOOK",
         payload: {
           book: {
-            id: self.crypto.randomUUID(),
+            id: bookId,
             title: book.title,
             author: book.author,
             publicationYear: book.publicationYear,
+            createdAt: Date.now().toString(),
           },
           pageSize,
         },
       });
 
-      const error = await bookClient.createBook(book);
+      const error = await bookClient.createBook({
+        id: bookId,
+        isbn: book.isbn,
+        title: book.title,
+        author: book.author,
+        coverUrl: book.coverUrl,
+        publicationYear: book.publicationYear,
+      });
 
       if (error) {
-        setBooks({
+        dispatchBook({
           type: "REVERT",
-          id: book.id || "",
+          id: bookId,
         });
         setCreatingBook(false);
 
         return setErrorCause("creatingBook");
       }
 
+      startTransition(async () => await revalidateCache());
       await fetchBooks();
 
       return setCreatingBook(false);
@@ -268,7 +290,6 @@ export default function Dashboard() {
         filterValue,
         rowsPerPage: pageSize,
         onCreateBookFormSubmit,
-        fetchBooks,
         setRowsPerPage: setPageSize,
         onClear,
         onNextPage,

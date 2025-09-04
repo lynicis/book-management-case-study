@@ -29,6 +29,8 @@ const formValidationSchema = z.object({
     .max(4, "Publication year must be a 4-digit number"),
 });
 
+export type CreateBookFormSubmit = z.infer<typeof formValidationSchema>;
+
 export default function BookFormModal() {
   const {
     isCreatingBook,

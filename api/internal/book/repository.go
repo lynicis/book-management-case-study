@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/exaring/otelpgx"
@@ -130,33 +129,30 @@ func (r *PgRepository) GetBooks(
 	}
 	defer connection.Release()
 
-	var query strings.Builder
-	query.WriteString("select * from books where deleted_at is null")
-
-	args := make([]interface{}, 0, 3)
-	argIndex := 1
-
-	var countQuery strings.Builder
-	countQuery.WriteString("select count(*) from books where deleted_at is null")
-
-	countArgs := make([]interface{}, 0, 1)
+	baseQuery := "select * from books where deleted_at is null"
+	baseCountQuery := "select count(*) from books where deleted_at is null"
+	
+	args := make([]any, 0, 6)
+	countArgs := make([]any, 0, 4)
 
 	if search != "" {
-		searchPlaceholder := fmt.Sprintf("$%d", argIndex)
-		condition := fmt.Sprintf(" and to_tsvector(id || ' ' || title || ' ' || author || ' ' || publication_year) @@ to_tsquery(%s)", searchPlaceholder)
-		query.WriteString(condition)
-		countQuery.WriteString(fmt.Sprintf(" and to_tsvector(id || ' ' || title || ' ' || author || ' ' || publication_year) @@ to_tsquery(%s)", searchPlaceholder))
+		searchCondition := " and (title ILIKE $1 OR author ILIKE $2 OR id::text ILIKE $3 OR publication_year ILIKE $4)"
+		baseQuery += searchCondition
+		baseCountQuery += searchCondition
 
-		args = append(args, search)
-		countArgs = append(countArgs, search)
-		argIndex++
+		searchPattern := "%" + search + "%"
+		args = append(args, searchPattern, searchPattern, searchPattern, searchPattern)
+		countArgs = append(countArgs, searchPattern, searchPattern, searchPattern, searchPattern)
+		
+		baseQuery += " limit $5 offset $6"
+		args = append(args, pageSize, (page-1)*pageSize)
+	} else {
+		baseQuery += " limit $1 offset $2"
+		args = append(args, pageSize, (page-1)*pageSize)
 	}
 
-	query.WriteString(fmt.Sprintf(" limit $%d offset $%d", argIndex, argIndex+1))
-	args = append(args, pageSize, (page-1)*pageSize)
-
 	var rows pgx.Rows
-	rows, err = connection.Query(ctx, query.String(), args...)
+	rows, err = connection.Query(ctx, baseQuery, args...)
 	if err != nil {
 		return nil, 0, fiber.ErrInternalServerError
 	}
@@ -168,7 +164,7 @@ func (r *PgRepository) GetBooks(
 	}
 
 	var totalRows int
-	if err = connection.QueryRow(ctx, countQuery.String(), countArgs...).Scan(&totalRows); err != nil {
+	if err = connection.QueryRow(ctx, baseCountQuery, countArgs...).Scan(&totalRows); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, 0, fiber.ErrNotFound
 		}
@@ -180,7 +176,9 @@ func (r *PgRepository) GetBooks(
 		return nil, 0, fiber.ErrNotFound
 	}
 
-	return &books, totalRows, nil
+	totalPage := (totalRows + pageSize - 1) / pageSize
+
+	return &books, totalPage, nil
 }
 
 func (r *PgRepository) GetBookById(ctx context.Context, id string) (*BookDTO, error) {
@@ -236,19 +234,20 @@ func (r *PgRepository) UpdateBookById(ctx context.Context, id string, book *Book
 	}
 	defer connection.Release()
 
-	if cmd, err := connection.Exec(
+	cmd, err := connection.Exec(
 		ctx,
 		"update books set title = $1, author = $2, publication_year = $3 where id = $4 and deleted_at is null",
 		book.Title,
 		book.Author,
 		book.PublicationYear,
 		id,
-	); err != nil {
-		if cmd.RowsAffected() == 0 {
-			return fiber.ErrNotFound
-		}
-
+	)
+	if err != nil {
 		return fiber.ErrInternalServerError
+	}
+
+	if cmd.RowsAffected() == 0 {
+		return fiber.ErrNotFound
 	}
 
 	return nil
@@ -269,12 +268,13 @@ func (r *PgRepository) DeleteBookById(ctx context.Context, id string) error {
 	defer connection.Release()
 
 	now := time.Now().UTC()
-	if cmd, err := connection.Exec(ctx, "update books set deleted_at = $1 where id = $2 and deleted_at is null", now, id); err != nil {
-		if cmd.RowsAffected() == 0 {
-			return fiber.ErrNotFound
-		}
-
+	cmd, err := connection.Exec(ctx, "update books set deleted_at = $1 where id = $2 and deleted_at is null", now, id)
+	if err != nil {
 		return fiber.ErrInternalServerError
+	}
+
+	if cmd.RowsAffected() == 0 {
+		return fiber.ErrNotFound
 	}
 
 	return nil

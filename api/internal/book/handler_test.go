@@ -190,7 +190,7 @@ func TestHandler_GetBooks(t *testing.T) {
 		mockRepository.
 			EXPECT().
 			GetBooks(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(books, 2, nil).
+			Return(books, 1, nil).
 			Times(1)
 
 		server, validate, tracer := setupServer()

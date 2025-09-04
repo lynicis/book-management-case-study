@@ -226,7 +226,8 @@ func TestPgRepository_UpdateBook(t *testing.T) {
 			PublicationYear: "2008",
 			UpdatedAt:       &now,
 		})
-		assert.NoError(t, err)
+		assert.Error(t, err)
+		assert.Equal(t, fiber.StatusNotFound, err.(*fiber.Error).Code)
 	})
 }
 
@@ -336,11 +337,11 @@ func TestPgRepository_GetBooks(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		books, total, err := pgRepository.GetBooks(context.TODO(), 1, 2, "")
+		books, totalPage, err := pgRepository.GetBooks(context.TODO(), 1, 2, "")
 		assert.NoError(t, err)
 		assert.NotNil(t, books)
 		assert.Len(t, *books, 2)
-		assert.Equal(t, 3, total)
+		assert.Equal(t, 1, totalPage)
 	})
 
 	t.Run("acquire connection error", func(t *testing.T) {
@@ -369,11 +370,11 @@ func TestPgRepository_GetBooks(t *testing.T) {
 		require.NoError(t, err)
 
 		pgRepository := NewPgRepository(trace.NewTracerProvider(), pgHost, pgPort.Port(), "root", "root", "test")
-		books, total, err := pgRepository.GetBooks(context.TODO(), 1, 5, "searchdoesnotmatch")
+		books, totalPage, err := pgRepository.GetBooks(context.TODO(), 1, 5, "searchdoesnotmatch")
 
 		assert.Error(t, err)
 		assert.Nil(t, books)
-		assert.Equal(t, 0, total)
+		assert.Equal(t, 0, totalPage)
 		assert.Equal(t, fiber.StatusNotFound, err.(*fiber.Error).Code)
 	})
 }

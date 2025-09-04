@@ -3,6 +3,7 @@ package book
 import "time"
 
 type CreateBookRequest struct {
+	Id              string `json:"id,omitempty" validate:"omitempty,uuid"`
 	CoverUrl        string `json:"coverUrl" validate:"required,url"`
 	ISBN            string `json:"isbn" validate:"required,isbn"`
 	Title           string `json:"title" validate:"required,min=1"`

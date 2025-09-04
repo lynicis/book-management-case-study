@@ -2,14 +2,14 @@
 
 import { useCallback, useContext, useMemo, useState } from "react";
 import {
+  SortDescriptor,
   TableHeader,
   TableColumn,
   TableBody,
-  TableRow,
-  TableCell,
-  Table,
-  SortDescriptor,
   Selection,
+  TableCell,
+  TableRow,
+  Table,
 } from "@heroui/table";
 import {
   DropdownTrigger,
@@ -26,16 +26,24 @@ import { BookContext } from "./book-context";
 import { BookDTO } from "@/dto/book.dto";
 import { IconSvgProps } from "@/types";
 
-export const columns = [
+type Column = {
+  name: string;
+  key: string;
+  sortable: boolean;
+};
+
+export const columns = Array.from<Column>([
   { name: "ID", key: "id", sortable: true },
   { name: "TITLE", key: "title", sortable: true },
   { name: "AUTHOR", key: "author", sortable: true },
   { name: "PUBLICATION OF YEAR", key: "publicationYear", sortable: true },
-  { name: "ACTIONS", key: "actions" },
-];
+  { name: "ACTIONS", key: "actions", sortable: false },
+]);
 
-export function capitalize(s: string) {
-  return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : "";
+export function capitalize(value: string): string {
+  return value
+    ? value.charAt(0).toUpperCase() + value.slice(1).toLowerCase()
+    : "";
 }
 
 export const PlusIcon = ({
@@ -171,27 +179,24 @@ export default function BookTable() {
     direction: "ascending",
   });
 
-  const hasSearchFilter = Boolean(filterValue);
-
+  /** TODO: Possible refactoring
+      get filtering and searching from backend
+  */
   const filteredItems = useMemo(() => {
     let filteredBooks = books?.books ? [...books?.books] : [];
 
-    if (filteredBooks && hasSearchFilter) {
+    if (filteredBooks && Boolean(filterValue)) {
       filteredBooks = filteredBooks.filter((book) =>
         book.title.toLowerCase().includes(filterValue?.toLowerCase() || ""),
       );
     }
 
     return filteredBooks;
-  }, [books, filterValue, hasSearchFilter]);
+  }, [books, filterValue]);
 
   const items = useMemo(() => {
-    const currentPage = books?.currentPage || 1;
-    const start = (currentPage - 1) * rowsPerPage;
-    const end = start + rowsPerPage;
-
-    return filteredItems ? filteredItems.slice(start, end) : [];
-  }, [books?.currentPage, filteredItems, rowsPerPage]);
+    return filteredItems || [];
+  }, [filteredItems]);
 
   const sortedItems = useMemo(() => {
     if (items) {

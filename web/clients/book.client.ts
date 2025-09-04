@@ -1,5 +1,5 @@
-import ky, { HTTPError, KyInstance } from "ky-universal";
 import { Span, SpanStatusCode, trace } from "@opentelemetry/api";
+import ky, { HTTPError, KyInstance } from "ky-universal";
 import ms from "ms";
 
 import { BookDTO } from "@/dto/book.dto";
@@ -11,14 +11,13 @@ export type GetAllBooksRequest = Partial<{
 }>;
 
 export type CreateBookRequest = {
+  id: string;
   coverUrl: string;
   isbn: string;
   title: string;
   author: string;
   publicationYear: string;
 };
-
-export type UpdateBookRequest = CreateBookRequest & { id: string };
 
 export type GetAllBooksResponse = {
   books: BookDTO[];
@@ -31,12 +30,14 @@ export interface IBookClient {
     params?: GetAllBooksRequest,
   ): Promise<{ books: GetAllBooksResponse; error?: HTTPError }>;
   getBookById(id: string): Promise<{ book: BookDTO; error?: HTTPError }>;
-  updateBook(book: UpdateBookRequest): Promise<HTTPError | undefined>;
+  updateBook(book: CreateBookRequest): Promise<HTTPError | undefined>;
   deleteBookById(id: string): Promise<HTTPError | undefined>;
 }
 
+// TODO: Possible refactoring with cache libraries (etc. SWC, TanstackQuery)
 export default class BookClient implements IBookClient {
   private bookApi: KyInstance;
+  private cacheKey: string = "books";
 
   constructor(apiUrl: string) {
     this.bookApi = ky.create({
@@ -51,7 +52,9 @@ export default class BookClient implements IBookClient {
     return trace
       .getTracer("book-web-app")
       .startActiveSpan("createBookClient", (span) => {
-        if (!process.env.NEXT_PUBLIC_API_URL) {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+        if (!apiUrl) {
           const error = new Error("API_URL is not defined");
 
           span.setStatus({
@@ -69,13 +72,22 @@ export default class BookClient implements IBookClient {
         });
         span.end();
 
-        return new BookClient(process.env.NEXT_PUBLIC_API_URL);
+        return new BookClient(apiUrl);
       });
   }
 
+  public static get cacheKey(): string {
+    return this.cacheKey;
+  }
+
+  /**
+   * Records an error from Ky HTTP client to the OpenTelemetry span
+   * Note: Caller must still call span.end() after handling the error
+   * @param span - The active OpenTelemetry span
+   * @param error - The error to record (typically HTTPError from Ky)
+   */
   private recordKyException(span: Span, error: unknown) {
-    span.recordException(error instanceof Error ? error : String(error));
-    span.end();
+    return span.recordException(error instanceof Error ? error : String(error));
   }
 
   async createBook(book: CreateBookRequest): Promise<HTTPError | undefined> {
@@ -95,6 +107,7 @@ export default class BookClient implements IBookClient {
           span.end();
         } catch (error) {
           this.recordKyException(span, error);
+          span.end();
 
           return error as HTTPError;
         }
@@ -107,18 +120,19 @@ export default class BookClient implements IBookClient {
     return await trace
       .getTracer("book-web-app")
       .startActiveSpan("getBooks", async (span) => {
+        const page = params?.page ?? 1;
+        const pageSize = params?.pageSize ?? 5;
+
         span.setAttributes({
-          page: params?.page,
-          pageSize: params?.pageSize,
+          page: page,
+          pageSize: pageSize,
           search: params?.search,
         });
 
         const searchParams = new URLSearchParams();
 
-        if (params?.page || params?.pageSize) {
-          searchParams.set("page", params?.page?.toString() || "1");
-          searchParams.set("pageSize", params?.pageSize?.toString() || "5");
-        }
+        searchParams.set("page", page.toString());
+        searchParams.set("pageSize", pageSize.toString());
 
         if (params?.search) {
           searchParams.set("search", params?.search);
@@ -129,7 +143,7 @@ export default class BookClient implements IBookClient {
             .get("books", {
               searchParams: searchParams,
               next: {
-                tags: ["books"],
+                tags: [this.cacheKey],
                 revalidate: ms("1h"),
               },
             })
@@ -144,6 +158,7 @@ export default class BookClient implements IBookClient {
           return { books };
         } catch (error) {
           this.recordKyException(span, error);
+          span.end();
 
           return {
             books: <GetAllBooksResponse>{},
@@ -162,7 +177,7 @@ export default class BookClient implements IBookClient {
           const { book } = await this.bookApi
             .get(`book/${id}`, {
               next: {
-                tags: ["book"],
+                tags: [this.cacheKey],
                 revalidate: ms("1h"),
               },
             })
@@ -177,6 +192,7 @@ export default class BookClient implements IBookClient {
           return { book };
         } catch (error) {
           this.recordKyException(span, error);
+          span.end();
 
           return {
             book: <BookDTO>{},
@@ -186,7 +202,7 @@ export default class BookClient implements IBookClient {
       });
   }
 
-  async updateBook(book: UpdateBookRequest): Promise<HTTPError | undefined> {
+  async updateBook(book: CreateBookRequest): Promise<HTTPError | undefined> {
     return await trace
       .getTracer("book-web-app")
       .startActiveSpan("updateBook", async (span) => {
@@ -201,6 +217,7 @@ export default class BookClient implements IBookClient {
           span.end();
         } catch (error) {
           this.recordKyException(span, error);
+          span.end();
 
           return error as HTTPError;
         }
@@ -222,6 +239,7 @@ export default class BookClient implements IBookClient {
           span.end();
         } catch (error) {
           this.recordKyException(span, error);
+          span.end();
 
           return error as HTTPError;
         }
