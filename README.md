@@ -49,8 +49,8 @@
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/byfood-case-study.git
-cd byfood-case-study
+git clone https://github.com/lynicis/book-management-case-study.git
+cd book-management-case-study
 ```
 
 2. **Start the application with Docker Compose**
